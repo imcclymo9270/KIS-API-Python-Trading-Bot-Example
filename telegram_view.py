@@ -1,4 +1,3 @@
-# 파일명: telegram_view.py
 import os
 from PIL import Image, ImageDraw, ImageFont
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -13,13 +12,10 @@ class TelegramView:
         season_short = "🌞서머타임 ON" if "Summer" in season_icon else "❄️서머타임 OFF"
         sync_time = "08:30" if target_hour == 17 else "09:30"
 
-        # 🚀 [V16.8] 에스크로 락다운 및 긴급수혈 엔진 설명 추가 (방금 누락되었던 부분 복구!)
+        # 🚀 [V16.14] 방어 시스템 텍스트 간소화 및 수동 닻 올리기 안내 문구/이모지 개선
         return (
             f"🌌 <b>[ 다이내믹 스노우볼 TrueSync {latest_version} ]</b>\n" 
             f"⚡ <b>API 팩트 기반 무결성 동기화 엔진 가동</b> \n\n"
-            f"🛡️ <b>[ V16.x 주요 방어 시스템 ]</b>\n"
-            f"🔒 <b>에스크로 락다운</b>: 리버스 진입 종목의 확보 자금을 가상 금고에 격리하여 타 종목의 예산 탈취를 원천 차단합니다.\n"
-            f"🩸 <b>긴급 수혈 엔진</b>: 에스크로 자금 고갈 시 봇이 스스로 MOC 의무매도를 단행하여 4일 치 생명수(현금)를 자동 창출합니다.\n\n"
             f"🕒 <b>[ 운영 스케줄 ({season_short}) ]</b>\n"
             f"🔹 6시간 간격 : 🔑 API 토큰 자동 갱신\n"
             f"🔹 {sync_time} : 📝 잔고 동기화 & 자동 복리\n"
@@ -35,7 +31,8 @@ class TelegramView:
             "▶️ <b>/ticker</b> : 🔄 운용 종목 선택\n"
             "▶️ <b>/mode</b> : 🏎️ 일반/가속 모드 변경\n"
             "▶️ <b>/version</b> : 🛠️ 버전 및 업데이트 내역\n\n" 
-            "⚠️ <b>/reset</b> : 🔓 비상 해제 메뉴 (락/리버스)" 
+            "⚠️ <b>/reset</b> : 🔓 비상 해제 메뉴 (락/리버스)\n" 
+            "<i>┗ 🚨 수동 닻 올리기: 예산 부족으로 리버스 진입 후 예수금을 추가 입금하셨다면, 이 메뉴에서 반드시 '리버스 강제 해제'를 눌러 닻을 올려주세요!</i>"
         )
 
     def get_reset_menu(self):
@@ -105,7 +102,7 @@ class TelegramView:
             is_rev = t_info.get('is_reverse', False)
             proc_status = t_info['plan'].get('process_status', '')
             
-            # 🔥 [V16.7 엠뷸런스 UI] 긴급 수혈 시 시각적 알림 추가 (방금 누락되었던 부분 복구!)
+            # 🔥 [V16.7 엠뷸런스 UI] 긴급 수혈 시 시각적 알림 추가
             if proc_status == "🩸리버스(긴급수혈)":
                 body_msg += f"⚠️ <b>[🚨 비상 상황: {t} 긴급 수혈 중]</b>\n"
                 body_msg += f"❗ <i>에스크로 금고가 바닥나 강제 매도를 통해 현금을 생성합니다.</i>\n\n"
