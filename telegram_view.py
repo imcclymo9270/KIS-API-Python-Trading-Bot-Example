@@ -34,7 +34,6 @@ class TelegramView:
             "<i>┗ 🚨 수동 닻 올리기: 예산 부족으로 리버스 진입 후 예수금을 추가 입금하셨다면, 이 메뉴에서 반드시 '리버스 강제 해제'를 눌러 닻을 올려주세요!</i>"
         )
 
-    # 🚀 [V16.16] 종목별 매매 잠금(Lock) 분리
     def get_reset_menu(self):
         msg = (
             "🛠️ <b>[ 시스템 안전 통제실 ]</b>\n"
@@ -49,7 +48,6 @@ class TelegramView:
         ]
         return msg, InlineKeyboardMarkup(keyboard)
 
-    # 🚀 [V16.16] 에스크로 완전 초기화 문구 반영
     def get_reset_confirm_menu(self, ticker):
         msg = (
             f"⚠️ <b>[ 경고: {ticker} 리버스 및 가상장부 강제 초기화 ]</b>\n\n"
@@ -62,8 +60,11 @@ class TelegramView:
         ]
         return msg, InlineKeyboardMarkup(keyboard)
 
-    def get_version_message(self, history_data):
-        msg = "🛠️ <b>[ 버전 및 업데이트 내역 ]</b>\n\n"
+    # 🚀 [V16.17] 접기/펼치기 인라인 버튼 UI가 적용된 버전 뷰어
+    def get_version_message(self, history_data, show_all=False):
+        title = "📚 <b>[ 전체 버전 및 업데이트 명예의 전당 ]</b>\n\n" if show_all else "🛠️ <b>[ 최신 버전 및 업데이트 내역 ]</b>\n\n"
+        msg = title
+        
         for h in history_data:
             if isinstance(h, str):
                 parts = h.split(' ', 2)
@@ -76,7 +77,16 @@ class TelegramView:
                     msg += f"📌 {h}\n\n"
             elif isinstance(h, dict): 
                 msg += f"📌 <b>{h.get('version', '')}</b> ({h.get('date', '')})\n▫️ {h.get('summary', '')}\n\n"
-        return msg.strip()
+        
+        msg = msg.strip()
+        
+        keyboard = []
+        if not show_all:
+            keyboard.append([InlineKeyboardButton("📜 과거 버전 명예의 전당 보기", callback_data="VERSION:ALL")])
+        else:
+            keyboard.append([InlineKeyboardButton("⬆️ 접기 (최신 버전만 보기)", callback_data="VERSION:LATEST")])
+            
+        return msg, InlineKeyboardMarkup(keyboard)
 
     def create_sync_report(self, status_text, dst_text, cash, rp_amount, ticker_data, is_trade_active):
         total_locked = sum(t_info.get('escrow', 0.0) for t_info in ticker_data)

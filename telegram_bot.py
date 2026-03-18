@@ -97,7 +97,6 @@ class TelegramController:
         
         tickers = self.cfg.get_active_tickers()
         
-        # 🚀 [V16.16 핵심] /sync 호출 시에도 리버스 1일차 누적 점검(멱등성)
         for t in tickers:
             self.cfg.update_reverse_day_if_needed(t)
             
@@ -174,7 +173,6 @@ class TelegramController:
         if self.sync_locks.get(ticker, False): return "LOCKED"
         self.sync_locks[ticker] = True 
         try:
-            # 🚀 [V16.16 핵심] 동기화 과정 시작 시 무조건 리버스 누적일 체크 
             self.cfg.update_reverse_day_if_needed(ticker)
             
             _, holdings = self.broker.get_account_balance()
@@ -437,11 +435,12 @@ class TelegramController:
             ])
         await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
+    # 🚀 [V16.17] 버전 출력 시 마크업(버튼) 함께 전달
     async def cmd_version(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not self._is_admin(update): return
         history_data = self.cfg.get_version_history()
-        msg = self.view.get_version_message(history_data)
-        await update.message.reply_text(msg, parse_mode='HTML')
+        msg, markup = self.view.get_version_message(history_data, show_all=False)
+        await update.message.reply_text(msg, reply_markup=markup, parse_mode='HTML')
 
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -449,11 +448,22 @@ class TelegramController:
         data = query.data.split(":")
         action, sub = data[0], data[1] if len(data) > 1 else ""
 
-        if action == "RESET":
+        # 🚀 [V16.17] 버전 전체/최신 보기 버튼 이벤트 처리
+        if action == "VERSION":
+            if sub == "ALL":
+                history_data = self.cfg.get_full_version_history()
+                msg, markup = self.view.get_version_message(history_data, show_all=True)
+                await query.edit_message_text(msg, reply_markup=markup, parse_mode='HTML')
+            elif sub == "LATEST":
+                history_data = self.cfg.get_version_history()
+                msg, markup = self.view.get_version_message(history_data, show_all=False)
+                await query.edit_message_text(msg, reply_markup=markup, parse_mode='HTML')
+
+        elif action == "RESET":
             if sub == "MENU":
                 msg, markup = self.view.get_reset_menu()
                 await query.edit_message_text(msg, reply_markup=markup, parse_mode='HTML')
-            elif sub == "LOCK": # 🚀 [V16.16] 종목별 매매 잠금 해제 반영
+            elif sub == "LOCK": 
                 ticker = data[2]
                 self.cfg.reset_lock_for_ticker(ticker)
                 await query.edit_message_text(f"✅ <b>[{ticker}] 금일 매매 잠금이 해제되었습니다.</b>", parse_mode='HTML')
@@ -464,7 +474,7 @@ class TelegramController:
             elif sub == "CONFIRM":
                 ticker = data[2]
                 self.cfg.set_reverse_state(ticker, False, 0)
-                self.cfg.clear_escrow_cash(ticker) # 🚀 [V16.16] 가상장부 완벽 소각 반영
+                self.cfg.clear_escrow_cash(ticker) 
                 await query.edit_message_text(f"✅ <b>[{ticker}] 리버스 모드 및 가상장부(Escrow)가 모두 강제 초기화되었습니다.</b>\n(다음 주문부터 일반 모드로 복귀합니다.)", parse_mode='HTML')
             elif sub == "CANCEL":
                 await query.edit_message_text("❌ 안전 통제실 메뉴를 닫습니다.", parse_mode='HTML')
