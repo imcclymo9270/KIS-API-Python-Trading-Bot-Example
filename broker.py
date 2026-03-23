@@ -334,9 +334,6 @@ class KoreaInvestmentBroker:
         return not bool(final_orders)
 
     def cancel_targeted_orders(self, ticker, side, target_ord_dvsn):
-        # 🚨 [무지성 일괄 취소 버그 방어 박제 - V20.11]
-        # 과거 cancel_all_orders_safe는 스나이퍼 격발 시 기존에 깔아둔 다른 방어 주문들까지 핵폭탄처럼 날려버리는 원형탈모 버그가 있었습니다.
-        # 이 함수는 외과 수술처럼 '목표한 타입(LOC: 34 또는 LIMIT: 00)'의 주문만 정확히 색출하여 정밀 타격(취소)합니다. (절대 삭제 금지)
         sll_buy_cd = '02' if side == "BUY" else '01'
         orders = self.get_unfilled_orders_detail(ticker)
         if not orders: return 0
@@ -369,9 +366,6 @@ class KoreaInvestmentBroker:
         }
         res = self._call_api(tr_id, "/uapi/overseas-stock/v1/trading/order", "POST", body=body)
         
-        # 🚨 [치명적 버그 방어 박제 - V20.11]
-        # 과거 더블 샷(중복 체결) 버그의 원인은 주문 발송 후 API 지연을 무시하고, 단순히 미체결 내역 유무만 맹목적으로 믿고 재장전했기 때문입니다.
-        # 이제 반드시 고유 주문번호(ODNO)를 반환하여, main.py의 재시도 루프에서 해당 번호의 '순수 미체결 잔량'만 정밀 차감 계산하도록 합니다. (절대 삭제 금지)
         rt_cd = res.get('rt_cd', '999')
         msg1 = res.get('msg1', '오류')
         output = res.get('output', {})
@@ -513,9 +507,6 @@ class KoreaInvestmentBroker:
             print(f"⚠️ [야후 파이낸스] 액면분할 조회 에러: {e}")
         return 0.0, ""
 
-    # ==========================================================
-    # 🔥 V20 핵심 심장: 프리마켓 통합 동적 하이브리드 타점 계산 엔진
-    # ==========================================================
     def get_dynamic_sniper_target(self, index_ticker, weight=1.0):
         try:
             df = yf.download(index_ticker, period='1mo', interval='5m', prepost=True, progress=False)
@@ -576,3 +567,28 @@ class KoreaInvestmentBroker:
         except Exception as e:
             print(f"⚠️ [Broker] 동적 스나이퍼 타점 계산 실패 ({index_ticker}): {e}")
             return None
+
+    def get_day_high_low(self, ticker):
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period="1d", interval="1m", prepost=True)
+            if not hist.empty:
+                day_high = float(hist['High'].max())
+                day_low = float(hist['Low'].min())
+                return day_high, day_low
+            else:
+                return float(stock.fast_info.get('dayHigh', 0.0)), float(stock.fast_info.get('dayLow', 0.0))
+        except Exception as e:
+            print(f"⚠️ [야후 파이낸스] 고가/저가 에러, 한투 API 우회 가동: {e}")
+
+        try:
+            excg_cd = self._get_exchange_code(ticker, target_api="PRICE")
+            params = {"AUTH": "", "EXCD": excg_cd, "SYMB": ticker}
+            res = self._call_api("HHDFS76200200", "/uapi/overseas-price/v1/quotations/price", "GET", params=params)
+            if res.get('rt_cd') == '0':
+                out = res.get('output', {})
+                return float(out.get('high', 0.0)), float(out.get('low', 0.0))
+        except Exception as e:
+            print(f"❌ [한투 API] 고가/저가 우회 조회 실패: {e}")
+            
+        return 0.0, 0.0

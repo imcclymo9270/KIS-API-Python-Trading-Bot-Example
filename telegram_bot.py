@@ -146,6 +146,7 @@ class TelegramController:
                 curr = await asyncio.to_thread(self.broker.get_current_price, t, is_market_closed=(status_code == "CLOSE"))
                 prev_close = await asyncio.to_thread(self.broker.get_previous_close, t)
                 ma_5day = await asyncio.to_thread(self.broker.get_5day_ma, t)
+                day_high, day_low = await asyncio.to_thread(self.broker.get_day_high_low, t)
                 
                 actual_avg = float(h['avg']) if h['avg'] else 0.0
                 actual_qty = int(h['qty'])
@@ -191,7 +192,6 @@ class TelegramController:
                 is_rev = plan.get('is_reverse', False)
                 secret_quarter_target = 0.0
                 
-                # 🚨 [V21.3 수정] V17 모드라면 전반전/후반전/리버스 관계없이 무조건 스나이퍼 타점 계산하여 노출
                 if ver == "V17" and actual_qty > 0:
                     secret_quarter_target = math.ceil(actual_avg * 1.0025 * 100) / 100.0
                 
@@ -210,7 +210,10 @@ class TelegramController:
                     'hybrid_target': hybrid_target_price,
                     'trigger_reason': trigger_reason,
                     'sniper_trigger': dynamic_pct,
-                    'secret_quarter_target': secret_quarter_target 
+                    'secret_quarter_target': secret_quarter_target,
+                    'day_high': day_high,
+                    'day_low': day_low,
+                    'prev_close': safe_prev_close
                 })
                 total_buy_needed += sum(o['price']*o['qty'] for o in plan['orders'] if o['side']=='BUY')
 

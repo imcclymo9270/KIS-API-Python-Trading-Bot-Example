@@ -65,6 +65,8 @@ class InfiniteStrategy:
         exit_target = rev_state.get("exit_target", 0.0)
 
         t_val, base_portion = self.cfg.get_absolute_t_val(ticker, qty, avg_price)
+        target_price = self._ceil(avg_price * (1 + target_ratio)) if avg_price > 0 else 0
+        is_jackpot_reached = target_price > 0 and current_price >= target_price
 
         if version in ["V14", "V17"]:
             _, dynamic_budget, rem_cash = self.cfg.calculate_v14_state(ticker)
@@ -73,19 +75,24 @@ class InfiniteStrategy:
             is_money_short_check = False if (is_simulation or market_type == "PRE_CHECK") else (real_available_cash < one_portion_amt)
             
             if not is_reverse and (t_val > (split - 1) or (qty > 0 and is_money_short_check)):
-                is_reverse = True 
-                rev_day = 1 
-                
-                current_return = (current_price - avg_price) / avg_price * 100.0 if avg_price > 0 else 0.0
-                default_exit = -15.0 if ticker == "TQQQ" else -20.0
-                
-                if current_return >= default_exit:
-                    exit_target = 0.0
+                if is_jackpot_reached:
+                    # 🚀 [V21.4 로직 3 패치] 대박 익절 모드 전환 (리버스 생략)
+                    # 목표 수익률에 도달했다면 리버스 감옥에 가지 않고 그대로 익절 페이즈로 부드럽게 넘어갑니다.
+                    pass
                 else:
-                    exit_target = default_exit
+                    is_reverse = True 
+                    rev_day = 1 
+                    
+                    current_return = (current_price - avg_price) / avg_price * 100.0 if avg_price > 0 else 0.0
+                    default_exit = -15.0 if ticker == "TQQQ" else -20.0
+                    
+                    if current_return >= default_exit:
+                        exit_target = 0.0
+                    else:
+                        exit_target = default_exit
 
-                if market_type == "REG":
-                    self.cfg.set_reverse_state(ticker, True, rev_day, exit_target)
+                    if market_type == "REG":
+                        self.cfg.set_reverse_state(ticker, True, rev_day, exit_target)
         else:
             one_portion_amt = base_portion
 
@@ -101,7 +108,6 @@ class InfiniteStrategy:
         else:
             star_price = self._ceil(avg_price * (1 + star_ratio)) if avg_price > 0 else 0
             
-        target_price = self._ceil(avg_price * (1 + target_ratio)) if avg_price > 0 else 0
         is_last_lap = (split - 1) < t_val < split
         
         if is_simulation: is_money_short = False
@@ -132,9 +138,9 @@ class InfiniteStrategy:
             if is_reverse:
                 sell_divisor = 10 if split <= 20 else 20
                 
-                # 🎯 [V20.2 핫픽스] 리버스 최소 4주 매도 보장 & 수량 부족 시 전량 청산
+                # 🎯 [V21.4 로직 2 패치] 리버스 최소 4주 매도 보장 & 수량 부족 시 전량 청산
                 if qty < 4:
-                    sell_qty = qty # 4주도 안 남았으면 그냥 다 팔고 청산
+                    sell_qty = qty # 4주도 안 남았으면 분할 불가하므로 그냥 잔량 전량 청산
                 else:
                     sell_qty = max(4, math.floor(qty / sell_divisor)) 
 
@@ -179,7 +185,9 @@ class InfiniteStrategy:
                 orders = core_orders + bonus_orders
                 return {"orders": orders, "core_orders": core_orders, "bonus_orders": bonus_orders, "smart_core_orders": [], "smart_bonus_orders": [], "t_val": t_val, "one_portion": one_portion_amt, "process_status": process_status, "is_reverse": is_reverse, "star_price": star_price, "star_ratio": star_ratio, "real_cash_used": real_available_cash}
 
-            if is_last_lap: process_status = "🏁마지막회차"
+            if is_jackpot_reached and (t_val > (split - 1) or is_money_short):
+                process_status = "🎉대박익절(리버스생략)"
+            elif is_last_lap: process_status = "🏁마지막회차"
             elif is_money_short: process_status = "🛡️방어모드(부족)"
             elif t_val < (split / 2): process_status = "🌓전반전"
             else: process_status = "🌕후반전"

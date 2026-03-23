@@ -186,6 +186,18 @@ class TelegramView:
                 
             body_msg += f"💰 현재 ${t_info['curr']:,.2f} / 평단 ${t_info['avg']:,.2f} ({t_info['qty']}주)\n"
             
+            day_high = t_info.get('day_high', 0.0)
+            day_low = t_info.get('day_low', 0.0)
+            prev_close = t_info.get('prev_close', 0.0)
+            
+            if prev_close > 0 and day_high > 0 and day_low > 0:
+                high_pct = (day_high - prev_close) / prev_close * 100
+                low_pct = (day_low - prev_close) / prev_close * 100
+                high_sign = "+" if high_pct > 0 else ""
+                low_sign = "+" if low_pct > 0 else ""
+                body_msg += f"📈 금일 고가: ${day_high:.2f} ({high_sign}{high_pct:.2f}%)\n"
+                body_msg += f"📉 금일 저가: ${day_low:.2f} ({low_sign}{low_pct:.2f}%)\n"
+
             sign = "+" if t_info['profit_amt'] >= 0 else "-"
             icon = "🔺" if t_info['profit_amt'] >= 0 else "🔻"
             body_msg += f"{icon} 수익: {sign}{abs(t_info['profit_pct']):.2f}% ({sign}${abs(t_info['profit_amt']):,.2f})\n"
