@@ -169,11 +169,18 @@ class ConfigManager:
 
     def overwrite_genesis_ledger(self, ticker, genesis_records, actual_avg):
         ledger = self.get_ledger()
-        remaining = [r for r in ledger if r['ticker'] != ticker]
+        target_recs = [r for r in ledger if r['ticker'] == ticker]
         
+        # 💡 [핵심 수술] 기존 역사가 존재하는 경우 파괴적 덮어쓰기 전면 차단
+        if len(target_recs) > 0:
+            print(f"⚠️ [보안 차단] {ticker}의 장부 기록이 이미 존재하여 파괴적 Genesis 덮어쓰기를 차단했습니다.")
+            return
+
+        max_id = max([r.get('id', 0) for r in ledger] + [0])
         for i, rec in enumerate(genesis_records):
-            remaining.append({
-                "id": i + 1,
+            max_id += 1
+            ledger.append({
+                "id": max_id,
                 "date": rec['date'],
                 "ticker": ticker,
                 "side": rec['side'],
@@ -181,9 +188,10 @@ class ConfigManager:
                 "qty": rec['qty'],
                 "avg_price": actual_avg, 
                 "exec_id": f"GENESIS_{int(time.time())}_{i}",
+                "desc": "✨과거기록복원",
                 "is_reverse": False 
             })
-        self._save_json(self.FILES["LEDGER"], remaining)
+        self._save_json(self.FILES["LEDGER"], ledger)
 
     def overwrite_incremental_ledger(self, ticker, temp_recs, new_today_records):
         ledger = self.get_ledger()
@@ -216,18 +224,23 @@ class ConfigManager:
 
     def overwrite_ledger(self, ticker, actual_qty, actual_avg):
         ledger = self.get_ledger()
-        remaining = [r for r in ledger if r['ticker'] != ticker]
+        target_recs = [r for r in ledger if r['ticker'] == ticker]
         
+        # 💡 [핵심 수술] 파괴적 서킷 브레이커 철거! 장부가 비어있을 때만 INIT 스냅샷 안전하게 1회 추가
+        if len(target_recs) > 0:
+            print(f"⚠️ [보안 차단] {ticker}의 장부 기록이 이미 존재하여 파괴적 INIT 덮어쓰기를 차단했습니다.")
+            return
+            
         kst = pytz.timezone('Asia/Seoul')
         today_str = datetime.datetime.now(kst).strftime('%Y-%m-%d')
-        new_id = 1 if not remaining else max(r.get('id', 0) for r in remaining) + 1
+        new_id = 1 if not ledger else max(r.get('id', 0) for r in ledger) + 1
         
-        remaining.append({
+        ledger.append({
             "id": new_id, "date": today_str, "ticker": ticker, "side": "BUY",
             "price": actual_avg, "qty": actual_qty, "avg_price": actual_avg, 
-            "exec_id": f"INIT_{int(time.time())}", "desc": "초기동기화", "is_reverse": False
+            "exec_id": f"INIT_{int(time.time())}", "desc": "✨최초스냅샷", "is_reverse": False
         })
-        self._save_json(self.FILES["LEDGER"], remaining)
+        self._save_json(self.FILES["LEDGER"], ledger)
 
     def calibrate_avg_price(self, ticker, actual_avg):
         ledger = self.get_ledger()
