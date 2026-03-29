@@ -14,7 +14,7 @@ class TelegramView:
 
     def get_start_message(self, target_hour, season_icon, latest_version):
         init_time = f"{target_hour:02d}:00"
-        order_time = f"{target_hour:02d}:05"  # 💡 [V22.03 패치] 30분에서 05분으로 실행 시간 앞당김
+        order_time = f"{target_hour:02d}:05"
         season_short = "🌞서머타임 ON" if "Summer" in season_icon else "❄️서머타임 OFF"
         sync_time = "08:30" if target_hour == 17 else "09:30"
 
@@ -25,7 +25,7 @@ class TelegramView:
             f"🔹 6시간 간격 : 🔑 API 토큰 자동 갱신\n"
             f"🔹 {sync_time} : 📝 잔고 동기화 & 자동 복리\n"
             f"🔹 {init_time} : 🔐 매매 초기화 및 변동성 락온\n"
-            f"🔹 {order_time} : 🌃 통합 주문 자동 실행\n\n" # 💡 프리장 감시 문구 삭제 및 05분 실행으로 압축
+            f"🔹 {order_time} : 🌃 통합 주문 자동 실행\n\n"
             "🛠 <b>[ 주요 명령어 ]</b>\n"
             "▶️ <b>/sync</b> : 📜 통합 지시서 조회\n"
             "▶️ <b>/record</b> : 📊 장부 동기화 및 조회\n"
@@ -279,6 +279,24 @@ class TelegramView:
             else:
                 body_msg += f" 💤 주문 없음 (관망/예산소진)\n"
             
+            if v_mode != "V17":
+                dyn_obj = t_info.get('dynamic_obj')
+                if dyn_obj is not None and hasattr(dyn_obj, 'metric_val'):
+                    m_val = dyn_obj.metric_val
+                    m_base = dyn_obj.metric_base
+                    weight = dyn_obj.weight
+                    target_drop = abs(float(dyn_obj))
+                else:
+                    m_val = 0.0
+                    m_base = 0.0
+                    weight = 0.0
+                    target_drop = t_info.get('sniper_trigger', 0.0)
+
+                body_msg += f"\n📡 <b>[ 스나이퍼 엔진 레이더 (관측 모드) ]</b>\n"
+                body_msg += f"▫️ <b>시장 진단</b> : 현재 변동성({m_val:.2f})이 1년 평균({m_base:.2f}) 대비 {weight:.2f}배 높습니다.\n"
+                body_msg += f"▫️ <b>동적 타격선</b> : 오늘은 당일 최고점 대비 <b>-{target_drop:.2f}%</b> 이상의 하락 진폭이 발생할 때만 유의미한 폭락으로 규정합니다.\n"
+                body_msg += f"▫️ <b>바닥 조건</b> : 타격선(-{target_drop:.2f}%) 이탈 후 세력의 거래량과 양봉 반등이 확인되는 시점을 시스템 상 최적의 진입 타점으로 계산합니다.\n"
+            
             body_msg += "\n"
 
         final_msg = header_msg + body_msg
@@ -286,13 +304,9 @@ class TelegramView:
         return final_msg, InlineKeyboardMarkup(keyboard) if keyboard else None
 
     def get_settlement_message(self, active_tickers, config, atr_data, dynamic_target_data=None):
-        """
-        [V3.0 패치] 수동 가중치를 삭제하고 V3.0 동적 변동성(VXN/HV) 상세 스펙을 표출합니다.
-        """
         msg = "⚙️ <b>[ 현재 설정 및 복리 상태 ]</b>\n\n"
         keyboard = []
         
-        # dynamic_target_data 가 None일 경우의 방어 코드
         if dynamic_target_data is None:
             dynamic_target_data = {}
         
@@ -318,25 +332,21 @@ class TelegramView:
             
             if ver == "V17":
                 atr5, atr14 = atr_data.get(t, (0.0, 0.0))
-                
-                # 💡 [V3.0 수술] broker.py에서 넘겨준 동적 타격선(TargetFloat 객체) 추출
                 target_obj = dynamic_target_data.get(t)
                 
                 if target_obj is not None and hasattr(target_obj, 'metric_val'):
-                    # 봇이 성공적으로 계산한 값 표출
                     m_val = target_obj.metric_val
                     m_name = target_obj.metric_name
                     m_base = int(target_obj.metric_base)
                     weight = target_obj.weight
-                    base_amp = abs(target_obj.base_amp) # 예: 7.59
-                    final_amp = float(target_obj)       # 예: -11.18
+                    base_amp = abs(target_obj.base_amp)
+                    final_amp = float(target_obj)
                     
                     msg += f"📊 <b>실시간 동적 변동성 (V3.0 스나이퍼):</b>\n"
                     msg += f"▫️ ATR5 ({atr5:.1f}%) / ATR14 ({atr14:.1f}%)\n"
                     msg += f"▫️ {m_name}: {m_val:.2f} / {m_base}\n"
                     msg += f"▫️ 타격선: {base_amp}% x {weight:.2f}배 ({final_amp:.2f}%)\n\n"
                 else:
-                    # 통신 오류 시 방어용 텍스트
                     base_amp = 7.59 if t == "SOXL" else 6.18
                     msg += f"📊 <b>실시간 동적 변동성 (V3.0 스나이퍼):</b>\n"
                     msg += f"▫️ ATR5 ({atr5:.1f}%) / ATR14 ({atr14:.1f}%)\n"
@@ -352,7 +362,6 @@ class TelegramView:
             ]
             keyboard.append(row1)
             
-            # 💡 [V3.0 수술] row2에서 수동 개입용 "타점가중치" 버튼 완전히 삭출!
             row2 = [
                 InlineKeyboardButton(f"🔄 {t} 무매3/무매4 전환", callback_data=f"TOGGLE:VERSION:{t}"),
                 InlineKeyboardButton(f"✂️ {t} 액면보정", callback_data=f"INPUT:STOCK_SPLIT:{t}")
@@ -474,4 +483,3 @@ class TelegramView:
             [InlineKeyboardButton("💎 SOXL + TQQQ 통합", callback_data="TICKER:ALL")]
         ]
         return f"🔄 <b>[ 운용 종목 선택 ]</b>\n현재: <b>{', '.join(current_tickers)}</b>", InlineKeyboardMarkup(keyboard)
-

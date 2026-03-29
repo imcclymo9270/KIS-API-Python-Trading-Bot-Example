@@ -24,7 +24,6 @@ class TelegramController:
         self.admin_id = self.cfg.get_chat_id()
         self.sync_locks = {} 
         self.tx_lock = tx_lock or asyncio.Lock()
-        # 🔥 V22.02 패닉 알림 변수 완전 제거 (사용 안함)
 
     def _is_admin(self, update: Update):
         if self.admin_id is None:
@@ -159,7 +158,6 @@ class TelegramController:
                 
                 idx_ticker = "SOXX" if t == "SOXL" else "QQQ"
                 
-                # 💡 [V3.0 패치] 기존 weight 변수 삭제, 자율주행 객체 전체 호출
                 dynamic_pct_obj = await asyncio.to_thread(self.broker.get_dynamic_sniper_target, idx_ticker)
                 dynamic_pct = float(dynamic_pct_obj) if dynamic_pct_obj is not None else (7.59 if t == "SOXL" else 6.18)
                 
@@ -194,6 +192,7 @@ class TelegramController:
                         is_first_half = t_val < (split / 2)
                         secret_quarter_target = plan.get('star_price', 0.0) if is_first_half else math.ceil(actual_avg * 1.0025 * 100) / 100.0
 
+                # 💡 [V22.05 개조] 뷰 엔진으로 V3.0 동적 변동성 객체 파라미터 직접 전달
                 ticker_data_list.append({
                     'ticker': t, 'version': ver, 't_val': t_val, 'split': split, 'curr': curr, 'avg': actual_avg, 'qty': actual_qty,
                     'profit_amt': (curr - actual_avg) * actual_qty if actual_qty > 0 else 0, 
@@ -213,7 +212,8 @@ class TelegramController:
                     'day_high': day_high,
                     'day_low': day_low,
                     'prev_close': safe_prev_close,
-                    'tracking_info': tracking_status 
+                    'tracking_info': tracking_status,
+                    'dynamic_obj': dynamic_pct_obj
                 })
                 total_buy_needed += sum(o['price']*o['qty'] for o in plan['orders'] if o['side']=='BUY')
 
@@ -513,22 +513,19 @@ class TelegramController:
         
         active_tickers = self.cfg.get_active_tickers()
         atr_data = {}
-        dynamic_target_data = {} # 💡 스나이퍼 타격선 전체 객체 보관용
+        dynamic_target_data = {} 
         
         status_msg = await update.message.reply_text("⏳ <b>실시간 시장 지표(HV/VXN) 연산 중...</b>", parse_mode='HTML')
         
         for t in active_tickers:
             if self.cfg.get_version(t) == "V17":
-                # 1. 단기 노이즈(ATR) 데이터 수집
                 atr_data[t] = await asyncio.to_thread(self.broker.get_atr_data, t)
-                # 2. 거시 변동성(V3.0 객체) 수집
                 idx_ticker = "SOXX" if t == "SOXL" else "QQQ"
                 dynamic_target_data[t] = await asyncio.to_thread(self.broker.get_dynamic_sniper_target, idx_ticker)
             else:
                 atr_data[t] = (0.0, 0.0)
                 dynamic_target_data[t] = None
                 
-        # 수집한 데이터를 view로 넘겨서 텍스트 완성
         msg, markup = self.view.get_settlement_message(active_tickers, self.cfg, atr_data, dynamic_target_data)
         await status_msg.edit_text(msg, reply_markup=markup, parse_mode='HTML')
 
@@ -694,7 +691,6 @@ class TelegramController:
             elif sub == "TARGET": ko_name = "목표 수익률(%)"
             elif sub == "COMPOUND": ko_name = "자동 복리율(%)"
             elif sub == "STOCK_SPLIT": ko_name = "액면 분할/병합 비율 (예: 10분할은 10, 10병합은 0.1)"
-            # 💡 SNIPER 가중치 입력 분기 삭제 완료!
             else: ko_name = "값"
             
             await context.bot.send_message(update.effective_chat.id, f"⚙️ [{ticker}] {ko_name} 입력 (숫자만):")
