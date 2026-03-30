@@ -14,7 +14,7 @@ import pytz
 import tempfile
 import pandas as pd   
 import numpy as np
-import volatility_engine as ve  # 💡 [V3.0 수술] 동적 변동성 엔진 연결
+import volatility_engine as ve  # 💡 [V3.1 수술] 동적 변동성 엔진 연결 (이중 가중치)
 
 class KoreaInvestmentBroker:
     def __init__(self, app_key, app_secret, cano, acnt_prdt_cd="01"):
@@ -577,9 +577,9 @@ class KoreaInvestmentBroker:
 
     def get_dynamic_sniper_target(self, index_ticker):
         """
-        [V3.0+] 자율주행 동적 스나이퍼 타점 산출 (롤링 1년 평균 분모 역산 동기화)
-        수동 가중치를 폐기하고, volatility_engine을 호출하여 실시간 공포 지수(VXN/HV) 기반 타격선을 반환합니다.
-        (리턴값은 float 형태의 target_drop이며, weight와 지표값도 객체 속성으로 함께 반환합니다.)
+        [V3.1+] 자율주행 동적 스나이퍼 타점 산출 (기초지수 1년 ATR 앵커 + 공포 가중치)
+        수동 가중치 및 고정 상수를 전면 폐기하고, volatility_engine을 호출하여 
+        기초지수 1년 ATR 기반의 3배수 동적 앵커와 실시간 공포 지수(VXN/HV) 기반 타격선을 반환합니다.
         """
         try:
             class TargetFloat(float):
@@ -587,23 +587,21 @@ class KoreaInvestmentBroker:
             
             if index_ticker == "SOXX":
                 # SOXL (기초지수 SOXX)
-                hv_val, weight, target_drop = ve.get_soxl_target_drop_full()
+                hv_val, weight, target_drop, base_amp = ve.get_soxl_target_drop_full()
                 ret = TargetFloat(target_drop)
                 ret.metric_val = hv_val
                 ret.weight = weight
-                ret.base_amp = -7.59
+                ret.base_amp = base_amp
                 ret.metric_name = "SOXX 자체 HV"
-                # 💡 [V3.0+ 수술] 1년 평균(분모) 역산 동기화 주입
                 ret.metric_base = round(hv_val / weight, 2) if weight > 0 else 25.0
             else:
                 # TQQQ (기초지수 QQQ, 공포지수 VXN)
-                vxn_val, weight, target_drop = ve.get_tqqq_target_drop_full()
+                vxn_val, weight, target_drop, base_amp = ve.get_tqqq_target_drop_full()
                 ret = TargetFloat(target_drop)
                 ret.metric_val = vxn_val
                 ret.weight = weight
-                ret.base_amp = -6.18
+                ret.base_amp = base_amp
                 ret.metric_name = "프리마켓 VXN"
-                # 💡 [V3.0+ 수술] 1년 평균(분모) 역산 동기화 주입
                 ret.metric_base = round(vxn_val / weight, 2) if weight > 0 else 20.0
             
             ret.is_panic = False
@@ -612,9 +610,9 @@ class KoreaInvestmentBroker:
             return ret
             
         except Exception as e:
-            print(f"⚠️ [Broker] V3.0 스나이퍼 타점 반환 실패 ({index_ticker}): {e}")
-            # 통신 실패 시 방어용 기본 상수 반환
-            fallback_val = -7.59 if index_ticker == "SOXX" else -6.18
+            print(f"⚠️ [Broker] V3.1 스나이퍼 타점 반환 실패 ({index_ticker}): {e}")
+            # 통신 실패 시 방어용 1년 롤링 ATR 기반 기본값 (SOXL: -8.79%, TQQQ: -4.95%)
+            fallback_val = -8.79 if index_ticker == "SOXX" else -4.95
             ret = TargetFloat(fallback_val)
             ret.metric_val = 0.0
             ret.weight = 1.0

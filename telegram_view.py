@@ -235,13 +235,11 @@ class TelegramView:
                         body_msg += f"💥 <b>스나이퍼: 명중 완료</b>\n"
                         
                 elif tracking_info.get('is_trailing', False):
-                    # 상방 트레일링 스나이퍼 락온 중 (시안 A)
                     peak_price = tracking_info.get('peak_price', 0.0)
                     trigger_price = tracking_info.get('trigger_price', 0.0)
                     body_msg += f"🎯 <b>쿼터 추적(${trigger_price:.2f}) 중 (고가: ${peak_price:.2f})</b>\n"
                     
                 elif tracking_info.get('is_tracking', False):
-                    # 하방 장중 바닥 추적 중 (기존 로직)
                     lowest = tracking_info.get('lowest_price', 0.0)
                     trigger_val = 1.5 if t == "SOXL" else 1.0
                     body_msg += f"🎯 <b>장전선 이탈! 장중 바닥 추적 중</b>\n  <b>(최저: ${lowest:.2f} / 목표반등: +{trigger_val}%)</b>\n"
@@ -253,7 +251,6 @@ class TelegramView:
                     body_msg += f"📉 <b>스나이퍼: 장전 대기 중</b>\n"
                 
                 if secret_quarter_target > 0 and not tracking_info.get('is_trailing', False):
-                    # 상방 트레일링 스나이퍼 락온 대기
                     body_msg += f"🦇 <b>쿼터 스나이퍼: ${secret_quarter_target:.2f} 이상 대기</b>\n"
 
             body_msg += f"📋 <b>[주문 계획 - {proc_status}]</b>\n"
@@ -292,18 +289,20 @@ class TelegramView:
                 dyn_obj = t_info.get('dynamic_obj')
                 if dyn_obj is not None and hasattr(dyn_obj, 'metric_val'):
                     m_val = dyn_obj.metric_val
-                    m_base = dyn_obj.metric_base
+                    m_base = float(dyn_obj.metric_base)
                     weight = dyn_obj.weight
                     target_drop = abs(float(dyn_obj))
+                    base_amp = abs(dyn_obj.base_amp) if hasattr(dyn_obj, 'base_amp') else (8.79 if t == "SOXL" else 4.95)
                 else:
                     m_val = 0.0
                     m_base = 0.0
                     weight = 0.0
                     target_drop = t_info.get('sniper_trigger', 0.0)
+                    base_amp = 8.79 if t == "SOXL" else 4.95
 
                 body_msg += f"\n📡 <b>[ 스나이퍼 엔진 레이더 (관측 모드) ]</b>\n"
                 body_msg += f"▫️ <b>시장 진단</b> : 현재 변동성({m_val:.2f})이 1년 평균({m_base:.2f}) 대비 {weight:.2f}배 높습니다.\n"
-                body_msg += f"▫️ <b>동적 타격선</b> : 오늘은 당일 최고점 대비 <b>-{target_drop:.2f}%</b> 이상의 하락 진폭이 발생할 때만 유의미한 폭락으로 규정합니다.\n"
+                body_msg += f"▫️ <b>동적 타격선</b> : 1년 ATR 앵커({base_amp:.2f}%)에 가중치를 적용, 당일 고점 대비 <b>-{target_drop:.2f}%</b> 하락 시 폭락으로 규정합니다.\n"
                 body_msg += f"▫️ <b>바닥 조건</b> : 타격선(-{target_drop:.2f}%) 이탈 후 세력의 거래량과 양봉 반등이 확인되는 시점을 시스템 상 최적의 진입 타점으로 계산합니다.\n"
             
             body_msg += "\n"
@@ -346,21 +345,21 @@ class TelegramView:
                 if target_obj is not None and hasattr(target_obj, 'metric_val'):
                     m_val = target_obj.metric_val
                     m_name = target_obj.metric_name
-                    m_base = int(target_obj.metric_base)
+                    m_base = float(target_obj.metric_base)
                     weight = target_obj.weight
                     base_amp = abs(target_obj.base_amp)
-                    final_amp = float(target_obj)
+                    final_amp = abs(float(target_obj))
                     
-                    msg += f"📊 <b>실시간 동적 변동성 (V3.0 스나이퍼):</b>\n"
+                    msg += f"📊 <b>실시간 동적 변동성 (V3.1 스나이퍼):</b>\n"
                     msg += f"▫️ ATR5 ({atr5:.1f}%) / ATR14 ({atr14:.1f}%)\n"
-                    msg += f"▫️ {m_name}: {m_val:.2f} / {m_base}\n"
-                    msg += f"▫️ 타격선: {base_amp}% x {weight:.2f}배 ({final_amp:.2f}%)\n\n"
+                    msg += f"▫️ {m_name}: {m_val:.2f} / {m_base:.2f}\n"
+                    msg += f"▫️ 타격선: {base_amp:.2f}% x {weight:.2f}배 (-{final_amp:.2f}%)\n\n"
                 else:
-                    base_amp = 7.59 if t == "SOXL" else 6.18
-                    msg += f"📊 <b>실시간 동적 변동성 (V3.0 스나이퍼):</b>\n"
+                    base_amp = 8.79 if t == "SOXL" else 4.95
+                    msg += f"📊 <b>실시간 동적 변동성 (V3.1 스나이퍼):</b>\n"
                     msg += f"▫️ ATR5 ({atr5:.1f}%) / ATR14 ({atr14:.1f}%)\n"
                     msg += f"▫️ 지표 연산 실패 (기본값 방어 가동 중)\n"
-                    msg += f"▫️ 타격선: {base_amp}% x 1.00배 (-{base_amp}%)\n\n"
+                    msg += f"▫️ 타격선: {base_amp:.2f}% x 1.00배 (-{base_amp:.2f}%)\n\n"
             else:
                 msg += "\n"
                 

@@ -1,5 +1,6 @@
 # ==========================================================
 # [volatility_engine.py]
+# ⚠️ V3.1 패치: 기초지수 1년 ATR 동적 앵커 및 이중 가중치 엔진 탑재
 # ==========================================================
 import yfinance as yf
 import pandas as pd
@@ -48,31 +49,65 @@ def _save_cache(key, value):
             os.fsync(fd)
         os.replace(temp_path, CACHE_FILE)
     except Exception as e:
-        print(f"⚠️ [Engine] 1년 평균 캐시 저장 실패: {e}")
+        print(f"⚠️ [Engine] 캐시 저장 실패: {e}")
+
+def _calculate_1y_atr(ticker, cache_key, default_atr):
+    """ 💡 기초지수의 최근 1년(252일) ATR14 평균값을 동적으로 연산하여 반환 """
+    try:
+        df = yf.download(ticker, period="2y", interval="1d", progress=False)
+        if df.empty:
+            return _load_cache(cache_key, default_atr)
+            
+        if hasattr(df.columns, 'droplevel'):
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.droplevel(1)
+                
+        df['Prev_Close'] = df['Close'].shift(1)
+        
+        tr1 = df['High'] - df['Low']
+        tr2 = (df['High'] - df['Prev_Close']).abs()
+        tr3 = (df['Low'] - df['Prev_Close']).abs()
+        
+        df['TR'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        df['ATR14'] = df['TR'].rolling(window=14).mean()
+        df['ATR14_pct'] = (df['ATR14'] / df['Close']) * 100
+        
+        df_valid = df.dropna(subset=['ATR14_pct'])
+        df_1y = df_valid.tail(252)
+        
+        if df_1y.empty:
+            return _load_cache(cache_key, default_atr)
+            
+        atr_1y_avg = float(df_1y['ATR14_pct'].mean())
+        if pd.isna(atr_1y_avg) or atr_1y_avg <= 0:
+            raise ValueError("Invalid ATR")
+            
+        _save_cache(cache_key, atr_1y_avg)
+        return atr_1y_avg
+        
+    except Exception as e:
+        print(f"⚠️ [Engine] {ticker} ATR 연산 오류: {e}")
+        return _load_cache(cache_key, default_atr)
 
 def get_tqqq_target_drop():
-    """ [ TQQQ 스나이퍼 ] 실시간 VXN을 최근 1년 평균으로 나누어 타격선을 계산합니다. """
+    """ [ TQQQ 스나이퍼 ] 실시간 VXN과 QQQ 1년 ATR을 결합하여 타격선 계산 """
     try:
-        # 💡 [데이터 섀도우 방어] 2년치 데이터를 당겨와 정확히 252거래일만 추출
         vxn_data = yf.download("^VXN", period="2y", interval="1d", progress=False)
-        
         if vxn_data.empty: 
-            return -6.18
+            return round(-(1.65 * 3), 2)
             
         if hasattr(vxn_data.columns, 'droplevel'):
             if isinstance(vxn_data.columns, pd.MultiIndex):
                 vxn_data.columns = vxn_data.columns.droplevel(1)
                 
         valid_closes = vxn_data['Close'].dropna()
-        
-        # 정확히 최근 1년(252거래일) 데이터만 슬라이싱하여 백테스트와 완벽 동기화
         valid_closes_1y = valid_closes.tail(252)
+        
         if valid_closes_1y.empty:
-            return -6.18
+            return round(-(1.65 * 3), 2)
             
         current_vxn = float(valid_closes_1y.iloc[-1])
         
-        # 💡 [롤링 1년 평균 연산 및 캐싱]
         try:
             mean_vxn = float(valid_closes_1y.mean())
             if pd.isna(mean_vxn) or mean_vxn <= 0:
@@ -81,23 +116,25 @@ def get_tqqq_target_drop():
         except Exception:
             mean_vxn = _load_cache("VXN_MEAN", 20.0)
         
-        # 비중 연산 및 타격선 도출
         weight = current_vxn / mean_vxn
-        target_drop = round(-6.18 * weight, 2)
         
+        # 💡 [V3.1 패치] 1배수 기초지수 QQQ의 1년 ATR * 3배 동적 스케일링
+        qqq_1y_atr = _calculate_1y_atr("QQQ", "QQQ_ATR_1Y", 1.65)
+        base_amp = -(qqq_1y_atr * 3)
+        
+        target_drop = round(base_amp * weight, 2)
         return target_drop
         
     except Exception as e:
         print(f"❌ VXN 스캔 오류: {e}")
-        return -6.18
+        return round(-(1.65 * 3), 2)
 
 def get_soxl_target_drop():
-    """ [ SOXL 스나이퍼 ] SOXX HV를 최근 1년 평균 HV로 나누어 타격선 계산 """
+    """ [ SOXL 스나이퍼 ] SOXX HV와 SOXX 1년 ATR을 결합하여 타격선 계산 """
     try:
-        # 💡 [데이터 섀도우 방어] 2년치 데이터를 당겨와 20일 증발을 상쇄
         soxx_data = yf.download("SOXX", period="2y", interval="1d", progress=False)
         if soxx_data.empty or len(soxx_data) < 21: 
-            return -7.59
+            return round(-(2.93 * 3), 2)
         
         if hasattr(soxx_data.columns, 'droplevel'):
             if isinstance(soxx_data.columns, pd.MultiIndex):
@@ -108,15 +145,13 @@ def get_soxl_target_drop():
         hv_20d = log_returns.rolling(window=20).std() * np.sqrt(252) * 100
         
         valid_hvs = hv_20d.dropna()
-        
-        # 정확히 최근 1년(252거래일) 데이터만 슬라이싱하여 백테스트와 완벽 동기화
         valid_hvs_1y = valid_hvs.tail(252)
+        
         if valid_hvs_1y.empty:
-            return -7.59
+            return round(-(2.93 * 3), 2)
             
         latest_hv = float(valid_hvs_1y.iloc[-1])
         
-        # 💡 [롤링 1년 평균 연산 및 캐싱]
         try:
             mean_hv = float(valid_hvs_1y.mean())
             if pd.isna(mean_hv) or mean_hv <= 0:
@@ -126,19 +161,25 @@ def get_soxl_target_drop():
             mean_hv = _load_cache("SOXX_HV_MEAN", 25.0)
         
         weight = latest_hv / mean_hv
-        return round(-7.59 * weight, 2)
+        
+        # 💡 [V3.1 패치] 1배수 기초지수 SOXX의 1년 ATR * 3배 동적 스케일링
+        soxx_1y_atr = _calculate_1y_atr("SOXX", "SOXX_ATR_1Y", 2.93)
+        base_amp = -(soxx_1y_atr * 3)
+        
+        return round(base_amp * weight, 2)
         
     except Exception as e:
         print(f"❌ SOXX HV 연산 오류: {e}")
-        return -7.59
+        return round(-(2.93 * 3), 2)
 
 def get_tqqq_target_drop_full():
-    """ 💡 [텔레그램 UI 표시용] TQQQ 상세 데이터 세트 반환 """
+    """ 💡 [텔레그램 UI 표시용] TQQQ 상세 데이터 반환 (4개 파라미터 리턴) """
     try:
         vxn_data = yf.download("^VXN", period="2y", interval="1d", progress=False)
         
         if vxn_data.empty: 
-            return 0.0, 1.0, -6.18
+            fallback_amp = round(-(1.65 * 3), 2)
+            return 0.0, 1.0, fallback_amp, fallback_amp
             
         if hasattr(vxn_data.columns, 'droplevel'):
             if isinstance(vxn_data.columns, pd.MultiIndex):
@@ -148,7 +189,8 @@ def get_tqqq_target_drop_full():
         valid_closes_1y = valid_closes.tail(252)
         
         if valid_closes_1y.empty:
-            return 0.0, 1.0, -6.18
+            fallback_amp = round(-(1.65 * 3), 2)
+            return 0.0, 1.0, fallback_amp, fallback_amp
             
         current_vxn = float(valid_closes_1y.iloc[-1])
         
@@ -161,20 +203,25 @@ def get_tqqq_target_drop_full():
             mean_vxn = _load_cache("VXN_MEAN", 20.0)
             
         weight = current_vxn / mean_vxn
-        target_drop = round(-6.18 * weight, 2)
         
-        return current_vxn, weight, target_drop
+        qqq_1y_atr = _calculate_1y_atr("QQQ", "QQQ_ATR_1Y", 1.65)
+        base_amp = round(-(qqq_1y_atr * 3), 2)
+        target_drop = round(base_amp * weight, 2)
+        
+        return current_vxn, weight, target_drop, base_amp
         
     except Exception as e:
         print(f"❌ VXN 상세 스캔 오류: {e}")
-        return 0.0, 1.0, -6.18
+        fallback_amp = round(-(1.65 * 3), 2)
+        return 0.0, 1.0, fallback_amp, fallback_amp
 
 def get_soxl_target_drop_full():
-    """ 💡 [텔레그램 UI 표시용] SOXL 상세 데이터 세트 반환 """
+    """ 💡 [텔레그램 UI 표시용] SOXL 상세 데이터 반환 (4개 파라미터 리턴) """
     try:
         soxx_data = yf.download("SOXX", period="2y", interval="1d", progress=False)
         if soxx_data.empty or len(soxx_data) < 21: 
-            return 0.0, 1.0, -7.59
+            fallback_amp = round(-(2.93 * 3), 2)
+            return 0.0, 1.0, fallback_amp, fallback_amp
         
         if hasattr(soxx_data.columns, 'droplevel'):
             if isinstance(soxx_data.columns, pd.MultiIndex):
@@ -188,7 +235,8 @@ def get_soxl_target_drop_full():
         valid_hvs_1y = valid_hvs.tail(252)
         
         if valid_hvs_1y.empty:
-            return 0.0, 1.0, -7.59
+            fallback_amp = round(-(2.93 * 3), 2)
+            return 0.0, 1.0, fallback_amp, fallback_amp
             
         latest_hv = float(valid_hvs_1y.iloc[-1])
         
@@ -201,10 +249,14 @@ def get_soxl_target_drop_full():
             mean_hv = _load_cache("SOXX_HV_MEAN", 25.0)
         
         weight = latest_hv / mean_hv
-        target_drop = round(-7.59 * weight, 2)
         
-        return latest_hv, weight, target_drop
+        soxx_1y_atr = _calculate_1y_atr("SOXX", "SOXX_ATR_1Y", 2.93)
+        base_amp = round(-(soxx_1y_atr * 3), 2)
+        target_drop = round(base_amp * weight, 2)
+        
+        return latest_hv, weight, target_drop, base_amp
         
     except Exception as e:
         print(f"❌ SOXX HV 상세 연산 오류: {e}")
-        return 0.0, 1.0, -7.59
+        fallback_amp = round(-(2.93 * 3), 2)
+        return 0.0, 1.0, fallback_amp, fallback_amp
