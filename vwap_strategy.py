@@ -10,20 +10,41 @@ class VwapStrategy:
     def __init__(self, config):
         self.cfg = config
         
-        # 💡 [VWAP 코어] 장 마감 30분(15:30~15:59) 전용 역사적 거래량 유동성 프로파일 (U-Curve 꼬리)
-        # 종가 부근으로 갈수록 ETF 리밸런싱 및 데이트레이더 청산으로 거래량이 기하급수적으로 폭증하는 패턴 반영
-        raw_profile = [
-            0.010, 0.011, 0.012, 0.013, 0.014,  # 15:30 ~ 15:34
-            0.015, 0.016, 0.018, 0.020, 0.022,  # 15:35 ~ 15:39
-            0.025, 0.028, 0.031, 0.035, 0.039,  # 15:40 ~ 15:44
-            0.043, 0.048, 0.053, 0.059, 0.065,  # 15:45 ~ 15:49
-            0.071, 0.078, 0.085, 0.093, 0.101,  # 15:50 ~ 15:54
-            0.110, 0.120, 0.131, 0.143, 0.160   # 15:55 ~ 15:59
-        ]
+        # 💡 [V23.01 멀티 코어 엔진] 백테스트 기반 종목별 1년 평균 U-Curve 가중치 딕셔너리
+        self.raw_profiles = {
+            "SOXL": [
+                0.0308, 0.0220, 0.0190, 0.0228, 0.0179,
+                0.0191, 0.0199, 0.0190, 0.0187, 0.0213,
+                0.0216, 0.0234, 0.0222, 0.0212, 0.0211,
+                0.0231, 0.0234, 0.0226, 0.0215, 0.0223,
+                0.0518, 0.0361, 0.0369, 0.0400, 0.0655,
+                0.0661, 0.0365, 0.0394, 0.0503, 0.1447
+            ],
+            "TQQQ": [
+                0.0292, 0.0249, 0.0231, 0.0225, 0.0237,
+                0.0222, 0.0253, 0.0242, 0.0223, 0.0184,
+                0.0265, 0.0253, 0.0218, 0.0212, 0.0220,
+                0.0273, 0.0230, 0.0246, 0.0240, 0.0286,
+                0.0628, 0.0354, 0.0384, 0.0373, 0.0624,
+                0.0564, 0.0321, 0.0382, 0.0441, 0.1129
+            ]
+        }
         
-        # 💡 가중치 정규화 (전체 합이 1.0이 되도록 교정)
+        # 기본값 (등록되지 않은 종목이 들어올 경우 S&P500 범용 유동성 프로파일 사용)
+        self.default_profile = [
+            0.010, 0.011, 0.012, 0.013, 0.014,
+            0.015, 0.016, 0.018, 0.020, 0.022,
+            0.025, 0.028, 0.031, 0.035, 0.039,
+            0.043, 0.048, 0.053, 0.059, 0.065,
+            0.071, 0.078, 0.085, 0.093, 0.101,
+            0.110, 0.120, 0.131, 0.143, 0.160
+        ]
+
+    def _get_vol_profile(self, ticker):
+        """종목별 가중치를 가져오고 합이 1.0이 되도록 정규화(Normalization)"""
+        raw_profile = self.raw_profiles.get(ticker, self.default_profile)
         total_weight = sum(raw_profile)
-        self.vol_profile = [round(w / total_weight, 4) for w in raw_profile]
+        return [round(w / total_weight, 4) for w in raw_profile]
 
     def _get_current_bin_index(self):
         est = pytz.timezone('US/Eastern')
@@ -49,8 +70,10 @@ class VwapStrategy:
                 "bin_weight": 0.0
             }
             
-        current_weight = self.vol_profile[bin_idx]
-        remaining_weight = sum(self.vol_profile[bin_idx:])
+        # 💡 종목(ticker)에 맞는 가중치 프로파일 동적 로드
+        vol_profile = self._get_vol_profile(ticker)
+        current_weight = vol_profile[bin_idx]
+        remaining_weight = sum(vol_profile[bin_idx:])
         
         # 💡 ZeroDivision 방어
         if remaining_weight <= 0:
@@ -69,7 +92,7 @@ class VwapStrategy:
             allocated_qty = math.floor(slice_budget / current_price)
             
             if allocated_qty > 0:
-                # 💡 스케줄러가 실시간 매도 1호가(Ask)로 덮어씌우므로, 기준가(Fallback)는 왜곡 없이 순수 현재가로 세팅
+                # 💡 실시간 1호가 정밀 타격용. 기준가는 순수 현재가로 세팅
                 safe_price = max(0.01, round(current_price, 2)) 
                 orders.append({
                     "side": "BUY", 
@@ -83,9 +106,8 @@ class VwapStrategy:
             # 수량 기반 분할 (Quantity Slicing)
             allocated_qty = math.floor(remaining_target * slice_ratio)
             
-            # 자연 종료 원칙 엄수: 마지막 분(15:59)에도 억지 시장가(MOC) 스윕 없이 지정가로만 타격
+            # 자연 종료 원칙 엄수
             if allocated_qty > 0:
-                # 💡 스케줄러가 실시간 매수 1호가(Bid)로 덮어씌우므로, 기준가(Fallback)는 왜곡 없이 순수 현재가로 세팅
                 safe_price = max(0.01, round(current_price, 2))
                 orders.append({
                     "side": "SELL", 
@@ -101,4 +123,3 @@ class VwapStrategy:
             "allocated_qty": allocated_qty,
             "bin_weight": current_weight
         }
-
